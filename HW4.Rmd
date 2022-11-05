@@ -1,0 +1,89 @@
+---
+title: "Untitled"
+output: html_document
+date: "2022-11-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidymodels)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(discrim)
+library(pROC)
+tidymodels_prefer()
+```
+##1.
+```{r}
+ti_data <- read.csv("titanic.csv")
+set.seed(66668888)
+#splits the data with 80% used for training and 20% for testing
+ti_split <- initial_split(ti_data, prop = 0.80,
+                                strata = survived)
+ti_train <- training(ti_split)
+ti_train$survived <- as.factor(ti_train$survived)
+ti_test <- testing(ti_split)
+ti_test$survived <- as.factor(ti_test$survived)
+
+dim(ti_train)
+dim(ti_test)
+
+```
+Testing and training is proportional at 712 training observations and 179 testing observations.
+
+##2.
+```{r}
+ti_folds <- vfold_cv(ti_train, v = 10)
+
+```
+Creates 10 fold cross validation of our training data.
+
+##3.  
+Essentially what we are doing is making 10 subsets of the training data, and training the model on 9 folds and testing on 1st fold, this repeats to test on the the second fold while training the model on the other 8 folds. and so on and so on. find the MSE and use this to predict the MSE of our model and find what model is best to use, as well as estimating how well our model should perform, without testing data. If we used the whole testing set, we would be essential doing what we did in previous homework.
+
+##4.
+
+```{r}
+# recipe to predict survival
+ti_recipe <- recipe(survived ~ pclass+sex+age+sib_sp+parch+fare ,data = ti_train) %>% step_impute_linear(age,impute_with = imp_vars(pclass,sex,age,sib_sp,parch,fare)) %>%
+step_dummy(all_nominal_predictors()) %>%
+step_interact(terms = ~ starts_with("sex"):fare) %>%
+step_interact(terms = ~ age:fare)
+
+#logistic regression workflow 
+log_reg <- logistic_reg() %>% set_engine("glm") %>%
+  set_mode("classification")
+
+log_reg_wflow <- workflow() %>% 
+  add_model(log_reg) %>% 
+  add_recipe(ti_recipe)
+
+#LDA workflow
+LDA <- discrim_linear() %>% set_engine("MASS") %>%
+  set_mode("classification")
+
+LDA_wflow <- workflow() %>% 
+  add_model(LDA) %>% 
+  add_recipe(ti_recipe)
+
+#QDA workflow
+QDA <- discrim_quad() %>% set_engine("MASS") %>%
+  set_mode("classification")
+
+QDA_wflow <- workflow() %>% 
+  add_model(QDA) %>% 
+  add_recipe(ti_recipe)
+
+```
+
+##5.
+```{r}
+log_reg_fit <- fit(log_reg_wflow,ti_folds)
+
+LDA_fit <- fit(LDA_wflow,ti_folds)
+
+QDA_fit <- fit(QDA_wflow,ti_folds)
+
+```
