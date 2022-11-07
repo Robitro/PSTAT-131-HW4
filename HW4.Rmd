@@ -1,5 +1,6 @@
 ---
-title: "Untitled"
+title: "PSTAT 131 HW-4"
+author: "Robert Miller"
 output: html_document
 date: "2022-11-04"
 ---
@@ -25,7 +26,7 @@ ti_split <- initial_split(ti_data, prop = 0.80,
 ti_train <- training(ti_split)
 ti_train$survived <- as.factor(ti_train$survived)
 ti_test <- testing(ti_split)
-ti_test$survived <- as.factor(ti_test$survived)
+
 
 dim(ti_train)
 dim(ti_test)
@@ -36,6 +37,7 @@ Testing and training is proportional at 712 training observations and 179 testin
 ##2.
 ```{r}
 ti_folds <- vfold_cv(ti_train, v = 10)
+ti_folds
 
 ```
 Creates 10 fold cross validation of our training data.
@@ -47,10 +49,10 @@ Essentially what we are doing is making 10 subsets of the training data, and tra
 
 ```{r}
 # recipe to predict survival
-ti_recipe <- recipe(survived ~ pclass+sex+age+sib_sp+parch+fare ,data = ti_train) %>% step_impute_linear(age,impute_with = imp_vars(pclass,sex,age,sib_sp,parch,fare)) %>%
+ti_recipe <- recipe(survived ~ pclass+sex+age+sib_sp+parch+fare,data = ti_train) %>% step_impute_linear(age,impute_with = imp_vars(pclass,sex,age,sib_sp,parch,fare)) %>%
 step_dummy(all_nominal_predictors()) %>%
 step_interact(terms = ~ starts_with("sex"):fare) %>%
-step_interact(terms = ~ age:fare)
+step_interact(terms = ~ age:fare) 
 
 #logistic regression workflow 
 log_reg <- logistic_reg() %>% set_engine("glm") %>%
@@ -79,11 +81,61 @@ QDA_wflow <- workflow() %>%
 ```
 
 ##5.
+
+```{r eval=FALSE}
+keep_pred <- control_resamples(save_pred = TRUE, save_workflow = TRUE)
+
+log_reg_fit <- log_reg_wflow %>% fit_resamples(resamples = ti_folds, contol = keep_pred)
+
+LDA_fit <- LDA_wflow %>% fit_resamples(resamples = ti_folds, control = keep_pred)
+
+QDA_fit <- QDA_wflow %>% fit_resamples(resamples= ti_folds,control=keep_pred)
+
+save(log_reg_fit,file="log_reg_fit.rda")
+
+save(LDA_fit,file="LDA_fit.rda")
+
+save(QDA_fit,file="QDA_fit.rda")
+```
+
 ```{r}
-log_reg_fit <- fit(log_reg_wflow,ti_folds)
+load(file= "log_reg_fit.rda")
+load(file="LDA_fit.rda")
+load(file="QDA_fit.rda")
+```
 
-LDA_fit <- fit(LDA_wflow,ti_folds)
+##6.
+```{r}
+#accuracy is 80.6%, and standard error is .014
+collect_metrics(log_reg_fit)
 
-QDA_fit <- fit(QDA_wflow,ti_folds)
+#accuracy is 79.4% and standard error is .016
+collect_metrics(LDA_fit)
+
+#accuracy is 79.5%, and standard error is .016 
+collect_metrics(QDA_fit)
 
 ```
+
+Logistic regression gives us both the lowest standard error as well as the highest accuracy. So that will be our chosen model.
+
+##7.
+```{r}
+log_reg_train_fit <- fit(log_reg_wflow,ti_train)
+
+
+```
+Here we have fit our logistic regression model on our training data.
+
+```{r}
+
+
+Log_reg_train_pred <- predict(log_reg_train_fit,ti_train)
+ti_train <- bind_cols(ti_train,Log_reg_train_pred, id = NULL)
+ti_train<- ti_train %>% rename("log_reg_Survived" =.pred_class)
+
+accuracy(ti_train, truth = survived, estimate = log_reg_Survived )
+
+```
+
+Our accuracy of logistic regression across our folds was 80.6% and our accuracy on our training data was 81.3%, overall k-fold cross-validation was helpful on deciding a model for us to fit and provided an accurate picture. 
